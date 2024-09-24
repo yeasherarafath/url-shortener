@@ -2,9 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Url;
+use Hashids\Hashids;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\Paginator;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Support\Str;
+use Validator;
 
-class HomeController extends Controller
+class HomeController extends Controller implements HasMiddleware
 {
     /**
      * Create a new controller instance.
@@ -13,8 +20,16 @@ class HomeController extends Controller
      */
     public function __construct()
     {
-        $this->middleware('auth');
+        // $this->middleware('auth');
     }
+
+    static function middleware(){
+        return [
+            new Middleware('auth')
+        ];
+    }
+
+
 
     /**
      * Show the application dashboard.
@@ -23,6 +38,74 @@ class HomeController extends Controller
      */
     public function index()
     {
-        return view('home');
+        $user = auth()->user();
+        Paginator::useBootstrapFour();
+        $urls = Url::paginate(25);
+        return view('home',compact('user','urls'));
+    }
+
+
+    public function store(Request $request, $isApi=false){
+        
+        $validationRule = [
+            'url' => 'required|url|max:255'
+        ];
+        if($isApi){
+            $validator = Validator::make($request->all(),$validationRule);
+            if($validator->fails()){
+                return response(['success' => false,'message' => $validator->errors()->first()]);
+            }
+        }else{
+            $request->validate($validationRule);
+        }
+
+        $url_trim = trim($request->url);
+
+        
+
+        
+
+        $userID = auth()->id();
+        try {
+            $urlCheck = Url::where('long_url',$url_trim)->where('user_id',$userID);
+            
+            if($urlCheck->exists()){
+                $errMsg = 'Short URL already generate for this url';
+                if($isApi){
+                    return response(['success' => false,'message' => $errMsg]);
+                }else{
+                    return back()->withError($errMsg)->withInput();
+                }
+            }
+            
+            do {
+                $str = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+                $rand_str = str_shuffle($str);
+                $hashids = new Hashids(Str::random(70),6,$rand_str);
+                $uid = $hashids->encode(Url::max('id')+1);
+            } while (Url::where('short_code',$uid)->exists());
+
+            $url = new URL;
+            $url->long_url = $url_trim;
+            $url->short_code = $uid;
+            $url->user_id = $userID;
+            $url->save();
+            $shortURL = route('short.url',['url' => $uid]);
+            if($isApi){
+                return response(['success' => true,'short_url' => $shortURL]);
+            }else{
+                return back()->with([
+                    'short_url' => $shortURL
+                ])->withSuccess('URL Shorted Successfully');
+            }
+        } catch (\Throwable $th) {
+            // throw $th;
+            $errMsg = 'Failed to Short URL';
+            if($isApi){
+                return response(['success' => false,'message' => $errMsg],400);
+            }else{
+                return back()->withError($errMsg);
+            }
+        }
     }
 }
