@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Url;
+use App\Trait\RepoResponse;
 use Hashids\Hashids;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\Paginator;
@@ -13,6 +14,7 @@ use Validator;
 
 class HomeController extends Controller implements HasMiddleware
 {
+    use RepoResponse;
     /**
      * Create a new controller instance.
      *
@@ -53,9 +55,11 @@ class HomeController extends Controller implements HasMiddleware
         if($isApi){
             $validator = Validator::make($request->all(),$validationRule);
             if($validator->fails()){
-                return response(['success' => false,'message' => $validator->errors()->first()]);
+                return $this->errorResponse($validator->errors()->first(),null,null,self::BAD_REQUEST);
             }
+            $userID = auth('api')->id();
         }else{
+            $userID = auth()->id();
             $request->validate($validationRule);
         }
 
@@ -65,14 +69,14 @@ class HomeController extends Controller implements HasMiddleware
 
         
 
-        $userID = auth()->id();
+        
         try {
             $urlCheck = Url::where('long_url',$url_trim)->where('user_id',$userID);
             
             if($urlCheck->exists()){
                 $errMsg = 'Short URL already generate for this url';
                 if($isApi){
-                    return response(['success' => false,'message' => $errMsg]);
+                    return $this->errorResponse($errMsg,null,null,self::BAD_REQUEST);
                 }else{
                     return back()->withError($errMsg)->withInput();
                 }
@@ -92,7 +96,10 @@ class HomeController extends Controller implements HasMiddleware
             $url->save();
             $shortURL = route('short.url',['url' => $uid]);
             if($isApi){
-                return response(['success' => true,'short_url' => $shortURL]);
+                // return response(['success' => true,'short_url' => $shortURL]);
+                return $this->successReponse('new url shorted',[
+                    'short_url' => $shortURL
+                ]);
             }else{
                 return back()->with([
                     'short_url' => $shortURL
@@ -102,7 +109,7 @@ class HomeController extends Controller implements HasMiddleware
             // throw $th;
             $errMsg = 'Failed to Short URL';
             if($isApi){
-                return response(['success' => false,'message' => $errMsg],400);
+                return $this->errorResponse($errMsg,null,null,self::BAD_REQUEST);
             }else{
                 return back()->withError($errMsg);
             }
