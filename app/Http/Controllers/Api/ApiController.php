@@ -107,12 +107,12 @@ class ApiController extends Controller implements HasMiddleware
         return Auth::guard('api');
     }
 
-
+    /**
+     * Short the URL
+     * @param \Illuminate\Http\Request $request
+     * @return mixed
+     */
     public function storeShortURL(Request $request){
-        return (new HomeController())->store($request,true);
-    }
-
-    public function shortURLList(Request $request){
         return (new HomeController())->store($request,true);
     }
 }
